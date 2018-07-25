@@ -27,12 +27,17 @@ definition(
 }
 
 
+
 preferences {
+    section("Battery Status") {
+        input "batteries", "capability.battery", title: "Battery Status", multiple: true
+    }
     section("Power Meter") {
         input "powers", "capability.powerMeter", title: "Power Sensor", multiple: true
     }
     section("Environment") {
         input "temperatures", "capability.temperatureMeasurement", title: "Temperature Sensors", multiple: true
+        input "humidities", "capability.relativeHumidityMeasurement", title: "Humidity Sensors", multiple: true
     }
     section("Security Sensors") {
         input "motions", "capability.motionSensor", title: "Motion Sensors", multiple: true
@@ -56,19 +61,22 @@ def updated() {
 }
 
 def initialize() {
+    subscribe(batteries, "battery", batteryHandler)
     subscribe(powers, "power", powerHandler)
     subscribe(temperatures, "temperature", temperatureHandler)
-    subscribe(motions, "motion", motionHandler)
+    subscribe(humidities, "humidity", humidityHandler)
+   	subscribe(motions, "motion", motionHandler)
     subscribe(contacts, "contact", contactHandler)
     subscribe(switches, "switch", switchHandler)
 }
 
 def sendEvent(sensorId, sensorName, sensorType, value) {
     log.debug "sending ${sensorId} at ${value}"
-    def cleanedSensorId = sensorId.replace(" ", "")
+    def cleanedSensorId = sensorId.replace(" ", "_")
+    def now = new Date()
     def params = [
         uri: "${appSettings.EventHubURL}",
-        body: "{ sensorId : \"${cleanedSensorId}\", sensorName : \"${sensorName}\", sensorType : \"${sensorType}\", value : \"${value}\" }",
+        body: "{ sensorId : \"${cleanedSensorId}\", sensorName : \"${sensorName}\", sensorType : \"${sensorType}\", sensorValue : \"${value}\", readAt: \"${now.format("yyyy-MM-dd", TimeZone.getTimeZone('UTC'))}T${now.format("HH:mm:ss.SSS", TimeZone.getTimeZone('UTC'))}Z\" }" ,
         contentType: "application/xml; charset=utf-8",
         requestContentType: "application/atom+xml;type=entry;charset=utf-8",
         headers: ["Authorization": "${appSettings.EventHubSecret}"],
@@ -84,37 +92,44 @@ def sendEvent(sensorId, sensorName, sensorType, value) {
     }
 }
 
+def batteryHandler(evt) {    
+    sendEvent(evt.displayName + ' (bat)', evt.displayName, 'battery', evt.value)
+}
+
 def powerHandler(evt) {
-    sendEvent('powerMeter', evt.displayName, 'power', evt.value)
+    sendEvent(evt.displayName + ' (power)', evt.displayName, 'power', evt.value)
 }
 
 def temperatureHandler(evt) {    
-    sendEvent(evt.displayName + 'temp', evt.displayName, 'temperature', evt.value)
+    sendEvent(evt.displayName + ' (temp)', evt.displayName, 'temperature', evt.value)
+}
+
+def humidityHandler(evt) {    
+    sendEvent(evt.displayName + ' (hum)', evt.displayName, 'humidity', evt.value)
 }
 
 def motionHandler(evt) {
     if (evt.value == 'active') {
-        sendEvent(evt.displayName + 'motion', evt.displayName, 'motion', 'motion detected')
+        sendEvent(evt.displayName + ' (motion)', evt.displayName, 'motion', 'motion detected')
     }
     if (evt.value == 'inactive') {
-        sendEvent(evt.displayName + 'motion', evt.displayName, 'motion', 'no motion detected')
+        sendEvent(evt.displayName + ' (motion)', evt.displayName, 'motion', 'no motion detected')
     }
 }
 
 def contactHandler(evt) {
     if (evt.value == 'open') {
-        sendEvent(evt.displayName + 'contact', evt.displayName, 'doorOpen', 'open')
+        sendEvent(evt.displayName + ' (contact)', evt.displayName, 'doorOpen', 'open')
     }
     if (evt.value == 'closed') {
-        sendEvent(evt.displayName + 'contact', evt.displayName, 'doorOpen', 'closed')
+        sendEvent(evt.displayName + ' (contact)', evt.displayName, 'doorOpen', 'closed')
     }
 }
 
 def switchHandler(evt) {
     if (evt.value == "on") {
-        sendEvent(evt.displayName + 'switch', evt.displayName, 'switch', 'on')
+        sendEvent(evt.displayName + ' (switch)', evt.displayName, 'switch', 'on')
     } else if (evt.value == "off") {
-        sendEvent(evt.displayName + 'switch', evt.displayName, 'switch', 'off')
+        sendEvent(evt.displayName + ' (switch)', evt.displayName, 'switch', 'off')
     }
 }
-
